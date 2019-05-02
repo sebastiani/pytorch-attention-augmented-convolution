@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 from torch import einsum
+from torch.autograd import Variable
 
 
 class AttentionConv2d(nn.Module):
-    def __init__(self, input_dim, output_dim, dk, dv, num_heads, kernel_size):
+    def __init__(self, input_dim, output_dim, height, width, dk, dv, num_heads, kernel_size, rel_encoding=True):
         super(AttentionConv2d, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -13,11 +14,16 @@ class AttentionConv2d(nn.Module):
         self.num_heads = num_heads
         self.kernel_size = kernel_size
         self.dkh = self.dk // self.num_heads
+        self.H = height
+        self.W = width
 
         self.conv_qkv = nn.Conv2d(input_dim, 2*dk + dv, 1)
         self.conv_attn = nn.Conv2d(dv, dv, 1)
         self.conv_out = nn.Conv2d(input_dim, output_dim - dv, kernel_size)
         self.softmax = nn.Softmax()
+        self.key_rel_w = Variable(self.dkh**-0.5 + torch.rand(2*width-1, self.dkh), require_grad=True)
+        self.key_rel_h = Variable(self.dkh**-0.5 + torch.rand(2*height-1, self.dkh), require_grad=True)
+        self.relative_encoding = rel_encoding
 
     def forward(self, input):
         conv_out = self.conv_out(input)
@@ -44,15 +50,12 @@ class AttentionConv2d(nn.Module):
         return torch.cat([conv_out, attn_out], dim=1)
 
 
-    def _relative_logits(self, q, H, W):
+    def _relative_logits(self, q):
         b, nh, dkh, _ = q.size()
-        q = q.view(b, nh, dkh, H, W)
+        q = q.view(b, nh, dkh, self.H, self.W)
 
-        key_rel_w = dkh**-0.5 + torch.rand(2*W-1, dkh)
-        key_rel_h = dkh**-0.5 + torch.rand(2*H-1, dkh)
-
-        rel_logits_w = self._relative_logits1d(q, key_rel_w, H, W, nh, [0, 1, 2, 4, 3, 5])
-        rel_logits_h = self._relative_logits1d(torch.transpose(q, [0, 1, 2, 4, 3]), key_rel_h, W, H, nh, [0, 1, 4, 2, 5, 3])
+        rel_logits_w = self._relative_logits1d(q, self.key_rel_w, self.H, self.W, nh, [0, 1, 2, 4, 3, 5])
+        rel_logits_h = self._relative_logits1d(torch.transpose(q, [0, 1, 2, 4, 3]), self.key_rel_h, self.W, self.H, nh, [0, 1, 4, 2, 5, 3])
         return rel_logits_h, rel_logits_w
 
     def _relative_logits1d(self, q, rel_k, H, W, Nh, transpose_mask):
@@ -70,7 +73,7 @@ class AttentionConv2d(nn.Module):
 
         col_pad = torch.zeros((b, nh, l, 1))
         x = torch.cat([x, col_pad], dim=3)
-        flat_x = x.view([b, nh, l*(2*l)])
+        flat_x = x.view([b, nh, l*(2*l)]);
         flat_pad = torch.zeros((b, nh, l-1))
         flat_x_padded = torch.cat([flat_x, flat_pad], dim=2)
 
