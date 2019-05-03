@@ -4,14 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .attentionConv2d import AttentionConv2d
 
+
 class BasicAttentionBlock(nn.Module):
     def __init__(self, in_planes, out_planes, stride, height, width, dk, dv, dropRate=0.0):
         super(BasicAttentionBlock, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.relu1 = nn.ReLU(inplace=True)
-        #self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-        #                       padding=1, bias=False)
-        self.conv1 = AttentionConv2d(in_planes, out_planes, height, width, dk, dv, num_heads=8, kernel_size=3)
+
+        #self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = AttentionConv2d(in_planes, out_planes, height, width, dk, dv, num_heads=8, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(out_planes)
         self.relu2 = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=1,
@@ -30,6 +31,8 @@ class BasicAttentionBlock(nn.Module):
         if self.droprate > 0:
             out = F.dropout(out, p=self.droprate, training=self.training)
         out = self.conv2(out)
+        print(self.equalInOut)
+        print()
         return torch.add(x if self.equalInOut else self.convShortcut(x), out)
 
 class NetworkBlock(nn.Module):
@@ -41,7 +44,7 @@ class NetworkBlock(nn.Module):
         layers = []
         dk = int(0.1 * out_planes)
         dv = int(0.2 * out_planes)
-        out_planes = out_planes - (2 * dk + dv)
+
         for i in range(int(nb_layers)):
             layers.append(block(i == 0 and in_planes or out_planes, out_planes, i == 0 and stride or 1, height, width, dk, dv, dropRate))
         return nn.Sequential(*layers)
@@ -50,9 +53,11 @@ class NetworkBlock(nn.Module):
         return self.layer(x)
 
 class AttentionWideResNet(nn.Module):
-    def __init__(self, depth, num_classes, widen_factor=1, dropRate=0.0):
+    def __init__(self, depth, num_classes, widen_factor=1, input_dim=(32, 32), dropRate=0.0):
         super(AttentionWideResNet, self).__init__()
         nChannels = [16, 16*widen_factor, 32*widen_factor, 64*widen_factor]
+
+        height, width = input_dim
         assert((depth - 4) % 6 == 0)
         n = (depth - 4) / 6
         block = BasicAttentionBlock
@@ -60,11 +65,11 @@ class AttentionWideResNet(nn.Module):
         self.conv1 = nn.Conv2d(3, nChannels[0], kernel_size=3, stride=1,
                                padding=1, bias=False)
         # 1st block
-        self.block1 = NetworkBlock(n, nChannels[0], nChannels[1], block, 1, dropRate)
+        self.block1 = NetworkBlock(n, nChannels[0], nChannels[1], block, 1, height, width, dropRate)
         # 2nd block
-        self.block2 = NetworkBlock(n, nChannels[1], nChannels[2], block, 2, dropRate)
+        self.block2 = NetworkBlock(n, nChannels[1], nChannels[2], block, 2, height, width, dropRate)
         # 3rd block
-        self.block3 = NetworkBlock(n, nChannels[2], nChannels[3], block, 2, dropRate)
+        self.block3 = NetworkBlock(n, nChannels[2], nChannels[3], block, 2, height, width, dropRate)
         # global average pooling and classifier
         self.bn1 = nn.BatchNorm2d(nChannels[3])
         self.relu = nn.ReLU(inplace=True)
@@ -84,6 +89,7 @@ class AttentionWideResNet(nn.Module):
     def forward(self, x):
         out = self.conv1(x)
         out = self.block1(out)
+        print(out.size())
         out = self.block2(out)
         out = self.block3(out)
         out = self.relu(self.bn1(out))
