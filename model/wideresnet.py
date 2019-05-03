@@ -32,7 +32,9 @@ class BasicAttentionBlock(nn.Module):
             out = F.dropout(out, p=self.droprate, training=self.training)
         out = self.conv2(out)
         print(self.equalInOut)
-        print()
+
+        print(out.size())
+        print(x.size())
         return torch.add(x if self.equalInOut else self.convShortcut(x), out)
 
 class NetworkBlock(nn.Module):
@@ -88,9 +90,11 @@ class AttentionWideResNet(nn.Module):
 
     def forward(self, x):
         out = self.conv1(x)
+        print("===============Block 1===============")
         out = self.block1(out)
-        print(out.size())
+        print("===============Block 2===============")
         out = self.block2(out)
+        print("===============Block 3===============")
         out = self.block3(out)
         out = self.relu(self.bn1(out))
         out = F.avg_pool2d(out, 8)

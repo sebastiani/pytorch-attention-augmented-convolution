@@ -48,7 +48,6 @@ class AttentionConv2d(nn.Module):
         attn_out = attn_out.contiguous().view(batch_size, self.dv, H, W)
         attn_out = self.conv_attn(attn_out)
         output = torch.cat([conv_out, attn_out], dim=1)
-        print(output.size())
         return output
 
 
