@@ -19,7 +19,7 @@ class BasicAttentionBlock(nn.Module):
                                padding=1, bias=False)
         self.droprate = dropRate
         self.equalInOut = (in_planes == out_planes)
-        self.convShortcut = (not self.equalInOut) and nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
+        self.convShortcut = (not self.equalInOut) and nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1,
                                padding=0, bias=False) or None
 
     def forward(self, x):
@@ -35,6 +35,9 @@ class BasicAttentionBlock(nn.Module):
 
         print(out.size())
         print(x.size())
+        if self.convShortcut:
+            interm = self.convShortcut(x)
+            print(interm.size())
         return torch.add(x if self.equalInOut else self.convShortcut(x), out)
 
 class NetworkBlock(nn.Module):
