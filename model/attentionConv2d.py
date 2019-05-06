@@ -29,7 +29,9 @@ class AttentionConv2d(nn.Module):
         conv_out = self.conv_out(input)
 
         qkv = self.conv_qkv(input)    # batch_size, 2*dk+dv, H, W
+        
         q, k, v = torch.split(qkv, [self.dk, self.dk, self.dv], dim=1)
+        
         batch_size, _, H, W = q.size()
 
         q = q.view([batch_size, self.num_heads, self.dk // self.num_heads, H*W])
@@ -60,7 +62,7 @@ class AttentionConv2d(nn.Module):
         return rel_logits_h, rel_logits_w
 
     def _relative_logits1d(self, q, rel_k, H, W, Nh, transpose_mask):
-        rel_logits = einsum('bhdxy, md -> bhxym', q, rel_k)
+        rel_logits = einsum('bhdxy, md -> bhxym', q, rel_k.to(q.get_device()))
 
         rel_logits = rel_logits.view([-1, Nh*H, W, 2*W-1])
         rel_logits = self._rel_to_abs(rel_logits)

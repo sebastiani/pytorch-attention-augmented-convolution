@@ -38,19 +38,19 @@ def get_data_loaders(batch_size):
 
     return train_loader, val_loader
 
-
 def run(batch_size, epochs, lr, momentum, log_interval):
     train_loader, val_loader = get_data_loaders(batch_size)
     model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
     model.cuda()
 
-    #model = nn.DataParallel(model)
+    model = nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     scheduler = CosineAnnealingScheduler(optimizer, 'lr', 0.1, 0.001, len(train_loader))
 
     
     loss_fn = nn.CrossEntropyLoss().cuda()
+    
     trainer = create_supervised_trainer(model, optimizer, loss_fn, device='cuda')
     trainer.add_event_handler(Events.ITERATION_STARTED, scheduler)
     evaluator = create_supervised_evaluator(model,
