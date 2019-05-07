@@ -21,8 +21,8 @@ class AttentionConv2d(nn.Module):
         self.conv_attn = nn.Conv2d(dv, dv, 1)
         self.conv_out = nn.Conv2d(input_dim, output_dim - dv, kernel_size, padding=padding)
         self.softmax = nn.Softmax()
-        self.key_rel_w = Variable(self.dkh**-0.5 + torch.rand(2*width-1, self.dkh), requires_grad=True).cuda()
-        self.key_rel_h = Variable(self.dkh**-0.5 + torch.rand(2*height-1, self.dkh), requires_grad=True).cuda()
+        self.key_rel_w = nn.Parameter(self.dkh**-0.5 + torch.rand(2*width-1, self.dkh), requires_grad=True)
+        self.key_rel_h = nn.Parameter(self.dkh**-0.5 + torch.rand(2*height-1, self.dkh), requires_grad=True)
         self.relative_encoding = rel_encoding
 
     def forward(self, input):
