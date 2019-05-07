@@ -54,8 +54,8 @@ def get_data_loaders(batch_size):
 def run(batch_size, epochs, lr, momentum, log_interval):
     train_loader, val_loader = get_data_loaders(batch_size)
     model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
-    model.cuda()
     writer = create_summary_writer(model, train_loader, "cifar100net_logs/")
+    model.cuda()
 
     model = nn.DataParallel(model)
 
