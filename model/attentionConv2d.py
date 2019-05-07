@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torch import einsum
-from torch.autograd import Variable
 
 
 class AttentionConv2d(nn.Module):
