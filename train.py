@@ -22,6 +22,7 @@ def create_summary_writer(model, data_loader, log_dir):
     writer = SummaryWriter(log_dir=log_dir)
     data_loader_iter = iter(data_loader)
     x, y = next(data_loader_iter)
+    
     try:
         writer.add_graph(model, x)
     except Exception as e:
@@ -56,6 +57,7 @@ def run(batch_size, epochs, lr, momentum, log_interval):
     model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
     writer = create_summary_writer(model, train_loader, "cifar100net_logs/")
     model.cuda()
+    
 
     model = nn.DataParallel(model)
 

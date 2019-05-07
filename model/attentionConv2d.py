@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import einsum
 
 
@@ -61,7 +62,7 @@ class AttentionConv2d(nn.Module):
         return rel_logits_h, rel_logits_w
 
     def _relative_logits1d(self, q, rel_k, H, W, Nh, transpose_mask):
-        rel_logits = einsum('bhdxy, md -> bhxym', q, rel_k.to(q.get_device()))
+        rel_logits = einsum('bhdxy, md -> bhxym', q, rel_k)
 
         rel_logits = rel_logits.view([-1, Nh*H, W, 2*W-1])
         rel_logits = self._rel_to_abs(rel_logits)
@@ -73,11 +74,13 @@ class AttentionConv2d(nn.Module):
     def _rel_to_abs(self, x):
         b, nh, l, _ = x.size()
 
-        col_pad = torch.zeros((b, nh, l, 1)).cuda()
-        x = torch.cat([x, col_pad], dim=3)
+        #col_pad = nn.Parameter(torch.zeros((b, nh, l, 1)))
+        #x = torch.cat([x, col_pad], dim=3)
+        x = F.pad(x, (0,1), 'constant', 0)
         flat_x = x.view([b, nh, l*(2*l)]);
-        flat_pad = torch.zeros((b, nh, l-1)).cuda()
-        flat_x_padded = torch.cat([flat_x, flat_pad], dim=2)
+        #flat_pad = nn.Parameter(torch.zeros((b, nh, l-1)))
+        #flat_x_padded = torch.cat([flat_x, flat_pad], dim=2)
+        flat_x_padded = F.pad(flat_x, (0, l-1), 'constant', 0)
 
         final_x = flat_x_padded.view([b, nh, l+1, 2*l-1])
         final_x = final_x[:, :, :l, l-1:]
