@@ -57,7 +57,7 @@ def run(batch_size, epochs, lr, momentum, log_interval):
     model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
     model.cuda()
 
-    #model = nn.DataParallel(model)
+    model = nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     scheduler = CosineAnnealingScheduler(optimizer, 'lr', 0.1, 0.001, len(train_loader))
