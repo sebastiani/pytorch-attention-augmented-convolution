@@ -15,6 +15,18 @@ from model.wideresnet import AttentionWideResNet
 
 from tqdm import tqdm
 
+from tensorboardX import SummaryWriter
+
+
+def create_summary_writer(model, data_loader, log_dir):
+    writer = SummaryWriter(log_dir=log_dir)
+    data_loader_iter = iter(data_loader)
+    x, y = next(data_loader_iter)
+    try:
+        writer.add_graph(model, x)
+    except Exception as e:
+        print("Failed to save model graph: {}".format(e))
+    return writer
 
 def get_data_loaders(batch_size):
     normalize = Normalize(mean=[0.49137254, 0.48235294, 0.4466667],
@@ -48,7 +60,7 @@ def run(batch_size, epochs, lr, momentum, log_interval):
 
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     scheduler = CosineAnnealingScheduler(optimizer, 'lr', 0.1, 0.001, len(train_loader))
-
+    writer = create_summary_writer(model, train_loader, "cifar100net_logs/")
     
     loss_fn = nn.CrossEntropyLoss().cuda()
     
@@ -89,6 +101,8 @@ def run(batch_size, epochs, lr, momentum, log_interval):
             pbar.desc = desc.format(engine.state.output)
             pbar.update(log_interval)
 
+        writer.add_scalar("training/loss", engine.state.output, engine.state.iteration)
+
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_training_results(engine):
         pbar.refresh()
@@ -101,6 +115,8 @@ def run(batch_size, epochs, lr, momentum, log_interval):
                                                                                         avg_accuracy,
                                                                                         avg_CE)
         )
+        writer.add_scalar("training/avg_loss", avg_CE, engine.state.epoch)
+        writer.add_scalar("training/avg_accuracy", avg_accuracy, engine.state.epoch)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_validation_results(engine):
@@ -115,11 +131,15 @@ def run(batch_size, epochs, lr, momentum, log_interval):
         )
         pbar.n = pbar.last_print_n = 0
 
+        writer.add_scalar("valdation/avg_loss", avg_CE, engine.state.epoch)
+        writer.add_scalar("valdation/avg_accuracy", avg_accuracy, engine.state.epoch)
+
     trainer.run(train_loader, max_epochs=epochs)
     pbar.close()
+    writer.close()
 
 
-run(batch_size=16,
+run(batch_size=32,
         epochs=500,
         lr=0.01,
         momentum=0.9,
