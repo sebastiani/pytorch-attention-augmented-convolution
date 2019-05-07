@@ -55,12 +55,12 @@ def run(batch_size, epochs, lr, momentum, log_interval):
     train_loader, val_loader = get_data_loaders(batch_size)
     model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
     model.cuda()
+    writer = create_summary_writer(model, train_loader, "cifar100net_logs/")
 
     model = nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     scheduler = CosineAnnealingScheduler(optimizer, 'lr', 0.1, 0.001, len(train_loader))
-    writer = create_summary_writer(model, train_loader, "cifar100net_logs/")
     
     loss_fn = nn.CrossEntropyLoss().cuda()
     
