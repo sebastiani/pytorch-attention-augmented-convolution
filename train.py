@@ -8,6 +8,7 @@ import torch.optim as optim
 from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
 from ignite.metrics import Loss, Accuracy
 from ignite.contrib.handlers.param_scheduler import CosineAnnealingScheduler
+from ignite.handlers.checkpoint import ModelCheckpoint
 from torchvision.datasets import CIFAR100
 from torchvision.transforms import Compose, RandomCrop, RandomHorizontalFlip, Normalize, ToTensor
 from model.wideresnet import AttentionWideResNet
@@ -53,6 +54,22 @@ def run(batch_size, epochs, lr, momentum, log_interval):
     
     trainer = create_supervised_trainer(model, optimizer, loss_fn, device='cuda')
     trainer.add_event_handler(Events.ITERATION_STARTED, scheduler)
+    trainer_saver = ModelCheckpoint(
+        'wgts/attconv_cifar100/',
+        filename_prefix="model_ckpt",
+        save_interval=1000,
+        n_saved=10,
+        atomic=True,
+        save_as_state_dict=True,
+        create_dir=True
+    )
+    trainer.add_event_handler(Events.ITERATION_COMPLETED,
+                              trainer_saver,
+                              {
+                                  "model": model,
+                                  "optimizer": optimizer,
+                                  "lr_scheduler": scheduler
+                              })
     evaluator = create_supervised_evaluator(model,
                                             metrics={"accuracy": Accuracy(),
                                                      'CE': Loss(loss_fn)},
