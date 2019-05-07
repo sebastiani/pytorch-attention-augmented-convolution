@@ -24,6 +24,7 @@ class AttentionConv2d(nn.Module):
         self.key_rel_w = nn.Parameter(self.dkh**-0.5 + torch.rand(2*width-1, self.dkh), requires_grad=True)
         self.key_rel_h = nn.Parameter(self.dkh**-0.5 + torch.rand(2*height-1, self.dkh), requires_grad=True)
         self.relative_encoding = rel_encoding
+        
 
     def forward(self, input):
         conv_out = self.conv_out(input)
@@ -51,7 +52,6 @@ class AttentionConv2d(nn.Module):
         attn_out = self.conv_attn(attn_out)
         output = torch.cat([conv_out, attn_out], dim=1)
         return output
-
 
     def _relative_logits(self, q):
         b, nh, dkh, _ = q.size()
@@ -84,4 +84,6 @@ class AttentionConv2d(nn.Module):
 
         final_x = flat_x_padded.view([b, nh, l+1, 2*l-1])
         final_x = final_x[:, :, :l, l-1:]
+        #final_x = torch.index_select(final_x, 2, torch.tensor(range(l)))
+        #final_x = torch.index_select(final_x, 3, torch.tensor(range(l-1, 2*l-1)))
         return final_x
