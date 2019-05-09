@@ -81,8 +81,6 @@ def run(batch_size, epochs, lr, momentum, log_interval):
                               trainer_saver,
                               {
                                   "model": model,
-                                  "optimizer": optimizer,
-                                  "lr_scheduler": scheduler
                               })
     evaluator = create_supervised_evaluator(model,
                                             metrics={"accuracy": Accuracy(),
