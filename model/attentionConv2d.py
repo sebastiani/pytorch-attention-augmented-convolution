@@ -5,7 +5,7 @@ from torch import einsum
 
 
 class AttentionConv2d(nn.Module):
-    def __init__(self, input_dim, output_dim, height, width, dk, dv, num_heads, kernel_size, padding, rel_encoding=True):
+    def __init__(self, input_dim, output_dim, dk, dv, num_heads, kernel_size, padding, rel_encoding=True, height=None, width=None):
         super(AttentionConv2d, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -14,6 +14,8 @@ class AttentionConv2d(nn.Module):
         self.num_heads = num_heads
         self.kernel_size = kernel_size
         self.dkh = self.dk // self.num_heads
+        if rel_encoding and not height:
+            raise("Cannot use relative encoding without specifying input's height and width")
         self.H = height
         self.W = width
 
@@ -74,16 +76,12 @@ class AttentionConv2d(nn.Module):
     def _rel_to_abs(self, x):
         b, nh, l, _ = x.size()
 
-        #col_pad = nn.Parameter(torch.zeros((b, nh, l, 1)))
-        #x = torch.cat([x, col_pad], dim=3)
+
         x = F.pad(x, (0,1), 'constant', 0)
         flat_x = x.view([b, nh, l*(2*l)]);
-        #flat_pad = nn.Parameter(torch.zeros((b, nh, l-1)))
-        #flat_x_padded = torch.cat([flat_x, flat_pad], dim=2)
         flat_x_padded = F.pad(flat_x, (0, l-1), 'constant', 0)
 
         final_x = flat_x_padded.view([b, nh, l+1, 2*l-1])
         final_x = final_x[:, :, :l, l-1:]
-        #final_x = torch.index_select(final_x, 2, torch.tensor(range(l)))
-        #final_x = torch.index_select(final_x, 3, torch.tensor(range(l-1, 2*l-1)))
+
         return final_x
