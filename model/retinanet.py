@@ -1,4 +1,6 @@
 """Original from from https://github.com/yhenon/pytorch-retinanet"""
+import sys
+#sys.path.append('../')
 import torch.nn as nn
 import torch
 import math
@@ -8,7 +10,7 @@ from ..utils.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from .BottleneckBlock import BottleneckBlock
 from .anchors import Anchors
 import losses
-from lib.nms.gpu_nms import gpu_nms
+from ..lib.nms.gpu_nms import gpu_nms
 
 
 def nms(dets, thresh):
@@ -164,17 +166,30 @@ class ClassificationModel(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, num_classes, block, layers, attention=False):
+    def __init__(self, num_classes, block, layers, attention=False, input_size=None):
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], attention)
-        self.layer2 = self._make_layer(block, 128, layers[1], attention, stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], attention, stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], attention, stride=2)
+
+        dummy = torch.rand((1, *input_size))
+        sizes = self.compute_sizes(self.conv1, dummy)
+
+        self.layer1 = self._make_layer(block, 64, layers[0], attention, h=sizes[2], w=sizes[3])
+        dummy = torch.rand(sizes)
+        sizes = self.compute_sizes(self.layer1, dummy)
+
+        self.layer2 = self._make_layer(block, 128, layers[1], attention, stride=2, h=sizes[2], w=sizes[3])
+        dummy = torch.rand(sizes)
+        sizes = self.compute_sizes(self.layer2, dummy)
+
+        self.layer3 = self._make_layer(block, 256, layers[2], attention, stride=2, h=sizes[2], w=sizes[3])
+        dummy = torch.rand(sizes)
+        sizes = self.compute_sizes(self.layer3, dummy)
+
+        self.layer4 = self._make_layer(block, 512, layers[3], attention, stride=2, h=sizes[2], w=sizes[3])
 
         if block == BasicBlock:
             fpn_sizes = [self.layer2[layers[1] - 1].conv2.out_channels, self.layer3[layers[2] - 1].conv2.out_channels,
@@ -214,7 +229,11 @@ class ResNet(nn.Module):
 
         self.freeze_bn()
 
-    def _make_layer(self, block, planes, blocks, attention, stride=1):
+    def compute_sizes(self, layer, dummy_input):
+        dummy_input = layer(dummy_input)
+        return dummy_input.size()
+
+    def _make_layer(self, block, planes, blocks, attention, stride=1, h=None, w=None):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -225,7 +244,7 @@ class ResNet(nn.Module):
 
         layers = []
         if attention:
-            layers.append(block(self.inplanes, planes, stride, downsample, attention, kappa=0.1, nu=0.05, ))   #how to determine heights and widths =X
+            layers.append(block(self.inplanes, planes, stride, downsample, attention, kappa=0.1, nu=0.05, num_heads=4, H=h, W=w))   #how to determine heights and widths =X
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
@@ -288,6 +307,10 @@ class ResNet(nn.Module):
             return [nms_scores, nms_class, transformed_anchors[0, anchors_nms_idx, :]]
 
 
+def AttentionRetinaNet(num_classes, input_size):
+    model = ResNet(num_classes, BottleneckBlock, [3, 4, 6, 3], attention=True, input_size=input_size)
+    return model
+
 def resnet18(num_classes, pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
     Args:
@@ -321,7 +344,7 @@ def resnet50(num_classes, pretrained=False, **kwargs):
     return model
 
 def resnet50_attn(num_classes, pretrained=False):
-    model = ResNet(num_classes, )
+    model = ResNet(num_classes, BottleneckBlock, [3, 4, 6, 3], attention=True, input_size=(3, ))
 
 def resnet101(num_classes, pretrained=False, **kwargs):
     """Constructs a ResNet-101 model.

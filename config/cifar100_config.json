@@ -1,0 +1,11 @@
+{
+  "name": "cifar100_net",
+  "model": "AttentionWideResNet",
+  "checkpoint_dir": "wgts/attconv_cifar100/",
+  "tb_logdir": "cifar100net_logs",
+  "batch_size": 16,
+  "epochs": 500,
+  "lr": 0.01,
+  "momentum": 0.9,
+  "log_interval": 200
+}

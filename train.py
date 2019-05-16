@@ -9,13 +9,14 @@ from ignite.engine import Events, create_supervised_evaluator, create_supervised
 from ignite.metrics import Loss, Accuracy
 from ignite.contrib.handlers.param_scheduler import CosineAnnealingScheduler
 from ignite.handlers.checkpoint import ModelCheckpoint
-from torchvision.datasets import CIFAR100
+from torchvision.datasets import CIFAR100, CocoDetection
 from torchvision.transforms import Compose, RandomCrop, RandomHorizontalFlip, Normalize, ToTensor
 from model.wideresnet import AttentionWideResNet
-
+from model.retinanet import AttentionRetinaNet
 from tqdm import tqdm
 
 from tensorboardX import SummaryWriter
+from .utils.utils import Resizer, Augmenter
 
 
 def create_summary_writer(model, data_loader, log_dir):
@@ -52,16 +53,49 @@ def get_data_loaders(batch_size):
 
     return train_loader, val_loader
 
-def run(batch_size, epochs, lr, momentum, log_interval):
-    train_loader, val_loader = get_data_loaders(batch_size)
-    model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
-    writer = create_summary_writer(model, train_loader, "cifar100net_logs/")
+def get_COCO_loaders(batch_size):
+    normalize = Normalize(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]
+    )
+
+
+    train_transforms = Compose([
+        Resizer(),
+        RandomHorizontalFlip(p=0.5),
+        ToTensor(),
+        normalize
+    ])
+
+    test_transform = Compose([
+        ToTensor(),
+        normalize
+    ])
+
+    train_dataset = CocoDetection('./data/coco', train=True, download=True, transform=train_transforms)
+    test_dataset = CocoDetection('./data/coco', train=False, download=True, transform=test_transform)
+
+    train_loader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+    return train_loader, test_loader
+
+
+def run(config):
+
+    train_loader, val_loader = get_data_loaders(config['batch_size'])
+    if config['model'] == 'AttentionWideResNet':
+        model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
+    elif config['model'] == 'AttentionRetinaNet':
+        model = AttentionRetinaNet(num_classes=80, input_size=(5,3))
+    writer = create_summary_writer(model, train_loader, config["tb_logdir"])
     model.cuda()
     
-
+    log_interval = config['log_interval']
+    epochs = config['epochs']
     model = nn.DataParallel(model)
 
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+    optimizer = optim.SGD(model.parameters(), lr=config['lr'], momentum=config['momentum'])
     scheduler = CosineAnnealingScheduler(optimizer, 'lr', 0.1, 0.001, len(train_loader))
     
     loss_fn = nn.CrossEntropyLoss().cuda()
@@ -69,7 +103,7 @@ def run(batch_size, epochs, lr, momentum, log_interval):
     trainer = create_supervised_trainer(model, optimizer, loss_fn, device='cuda')
     trainer.add_event_handler(Events.ITERATION_STARTED, scheduler)
     trainer_saver = ModelCheckpoint(
-        'wgts/attconv_cifar100/',
+        config['checkpoint_dir'],
         filename_prefix="model_ckpt",
         save_interval=1000,
         n_saved=10,
