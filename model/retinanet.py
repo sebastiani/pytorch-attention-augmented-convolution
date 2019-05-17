@@ -9,7 +9,7 @@ import torch.utils.model_zoo as model_zoo
 from ..utils.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from .BottleneckBlock import BottleneckBlock
 from .anchors import Anchors
-import losses
+from .losses import FocalLoss
 from ..lib.nms.gpu_nms import gpu_nms
 
 
@@ -209,7 +209,7 @@ class ResNet(nn.Module):
 
         self.clipBoxes = ClipBoxes()
 
-        self.focalLoss = losses.FocalLoss()
+        self.focalLoss = FocalLoss()
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

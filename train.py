@@ -1,8 +1,5 @@
-import os
-import torch
 import torch.nn as nn
 import torch.utils.data as data
-import torch.distributed as distributed
 import torch.optim as optim
 
 from ignite.engine import Events, create_supervised_evaluator, create_supervised_trainer
@@ -11,12 +8,20 @@ from ignite.contrib.handlers.param_scheduler import CosineAnnealingScheduler
 from ignite.handlers.checkpoint import ModelCheckpoint
 from torchvision.datasets import CIFAR100, CocoDetection
 from torchvision.transforms import Compose, RandomCrop, RandomHorizontalFlip, Normalize, ToTensor
-from model.wideresnet import AttentionWideResNet
-from model.retinanet import AttentionRetinaNet
+from .model.wideresnet import AttentionWideResNet
+from .model.retinanet import AttentionRetinaNet
 from tqdm import tqdm
 
 from tensorboardX import SummaryWriter
 from .utils.utils import Resizer, Augmenter
+import argparse
+import json
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", type=str, help="config path")
+
+args = parser.parse_args()
 
 
 def create_summary_writer(model, data_loader, log_dir):
@@ -72,8 +77,13 @@ def get_COCO_loaders(batch_size):
         normalize
     ])
 
-    train_dataset = CocoDetection('./data/coco', train=True, download=True, transform=train_transforms)
-    test_dataset = CocoDetection('./data/coco', train=False, download=True, transform=test_transform)
+    train_dataset = CocoDetection('data/coco_detection/train',
+                                  'data/coco_detection/annotations/instances_train2017.json',
+                                   transform=train_transforms)
+
+    test_dataset = CocoDetection('./data/coco_detection/val',
+                                 './data/coco_detection/annotations/instances_val2017.json',
+                                 transform=test_transform)
 
     train_loader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
@@ -83,10 +93,11 @@ def get_COCO_loaders(batch_size):
 
 def run(config):
 
-    train_loader, val_loader = get_data_loaders(config['batch_size'])
     if config['model'] == 'AttentionWideResNet':
+        train_loader, val_loader = get_data_loaders(config['batch_size'])
         model = AttentionWideResNet(28, 100, 10, (32, 32), 0.0)
     elif config['model'] == 'AttentionRetinaNet':
+        train_loader, val_loader = get_COCO_loaders(config['batch_size'])
         model = AttentionRetinaNet(num_classes=80, input_size=(5,3))
     writer = create_summary_writer(model, train_loader, config["tb_logdir"])
     model.cuda()
@@ -173,10 +184,10 @@ def run(config):
     writer.close()
 
 
-run(batch_size=32,
-        epochs=500,
-        lr=0.01,
-        momentum=0.9,
-        log_interval=200)
+config_file = args.config
+with open(config_file, 'rb') as infile:
+    config = json.load(infile)
+
+run(config)
 
 

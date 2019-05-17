@@ -1,0 +1,11 @@
+{
+  "name": "coco_net",
+  "model": "AttentionRetinaNet",
+  "checkpoint_dir": "wgts/attnconv_coco/",
+  "tb_logdir": "coconet_logs",
+  "batch_size": 16,
+  "epochs": 500,
+  "lr": 0.01,
+  "momentum": 0.9,
+  "log_interval": 200
+}
