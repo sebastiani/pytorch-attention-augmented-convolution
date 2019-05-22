@@ -7,7 +7,7 @@ from ignite.metrics import Loss, Accuracy
 from ignite.contrib.handlers.param_scheduler import CosineAnnealingScheduler
 from ignite.handlers.checkpoint import ModelCheckpoint
 from torchvision.datasets import CIFAR100
-from .dataloaders import CocoDetection
+from dataloaders import CocoDetection
 from torchvision.transforms import Compose, RandomCrop, RandomHorizontalFlip, Normalize, ToTensor
 from .model.wideresnet import AttentionWideResNet
 from .model.retinanet import AttentionRetinaNet

@@ -170,22 +170,23 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        dummy = torch.rand((1, *input_size))
-        sizes = self.compute_sizes(self.conv1, dummy)
+        #dummy = torch.rand((1, *input_size))
+        #sizes = self.compute_sizes(self.conv1, dummy)
 
-        self.layer1 = self._make_layer(block, 64, layers[0], attention, h=sizes[2], w=sizes[3])
-        dummy = torch.rand(sizes)
-        sizes = self.compute_sizes(self.layer1, dummy)
+        #self.layer1 = self._make_layer(block, 64, layers[0], attention, h=sizes[2], w=sizes[3])
+        self.layer1 = self._make_layer(block, 64, layers[0], attention=attention, rel_encoding=False)
+        #dummy = torch.rand(sizes)
+        #sizes = self.compute_sizes(self.layer1, dummy)
 
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, attention=attention, h=int(sizes[2]), w=int(sizes[3]))
-        dummy = torch.rand(sizes)
-        sizes = self.compute_sizes(self.layer2, dummy)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, attention=attention, rel_encoding=False)
+        #dummy = torch.rand(sizes)
+        #sizes = self.compute_sizes(self.layer2, dummy)
 
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, attention=attention, h=int(sizes[2]), w=int(sizes[3]))
-        dummy = torch.rand(sizes)
-        sizes = self.comptue_sizes(self.layer3, dummy)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, attention=attention, rel_encoding=False)
+        #dummy = torch.rand(sizes)
+        #sizes = self.comptue_sizes(self.layer3, dummy)
 
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, attention=attention, h=int(sizes[2]), w=int(sizes[3]))
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, attention=attention, rel_encoding=False)
 
         if block == BasicBlock:
             fpn_sizes = [self.layer2[layers[1]-1].conv2.out_channels, self.layer3[layers[2]-1].conv2.out_channels, self.layer4[layers[3]-1].conv2.out_channels]
@@ -223,7 +224,7 @@ class ResNet(nn.Module):
 
         self.freeze_bn()
 
-    def _make_layer(self, block, planes, blocks, stride=1, h=None, w=None):
+    def _make_layer(self, block, planes, blocks, stride=1, attention=False, h=None, w=None, rel_encoding=False):
         downsample = None
 
         if stride != 1 or self.inplanes != planes * block.expansion:
@@ -236,7 +237,7 @@ class ResNet(nn.Module):
         layers = []
         if block == BottleneckBlock:
             layers.append(
-                block(self.inplanes, planes, stride, downsample, attention=True, kappa=0.1, nu=0.05, num_heads=4, H=h, W=w))
+                block(self.inplanes, planes, stride, downsample, attention=True, kappa=0.1, nu=0.05, num_heads=4, H=h, W=w, rel_encoding=rel_encoding))
         else:
             layers.append(block(self.inplanes, planes, stride, downsample))
         self.inplanes = planes * block.expansion

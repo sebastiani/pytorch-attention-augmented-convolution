@@ -7,7 +7,7 @@ from attentionConv2d import AttentionConv2d
 class BottleneckBlock(nn.Module):
     expansion = 4
     def __init__(self, input_dim, output_dim, stride=1, downsample_shortcut=None, attention=False, expansion=4,
-                 kappa=None, nu=None, num_heads=None, H=None, W=None):
+                 kappa=None, nu=None, num_heads=None, H=None, W=None, rel_encoding=False):
         super(BottleneckBlock, self).__init__()
         self.expansion = expansion
 
@@ -29,14 +29,15 @@ class BottleneckBlock(nn.Module):
             while dv % num_heads != 0:
                 dv += 1
 
-            h = comptue_dim(H, 1, 3, stride)
-            w = comptue_dim(W, 1, 3, stride)
+            h = int(comptue_dim(H, 1, 3, stride)) if H is not None else None
+            w = int(comptue_dim(W, 1, 3, stride)) if W is not None else None
 
             self.conv3 = AttentionConv2d(input_dim, expansion_dim, dk, dv, num_heads,
                                          kernel_size=1,
                                          padding=0,
-                                         height=int(h),
-                                         width=int(w))
+                                         height=h,
+                                         width=w,
+                                         rel_encoding=False)
 
         else:
             self.conv3 = nn.Conv2d(output_dim, expansion_dim, kernel_size=1, bias=False)
@@ -45,17 +46,14 @@ class BottleneckBlock(nn.Module):
         self.downsample_shortcut = downsample_shortcut
 
     def forward(self, x):
-        print('x ', x.size())
         residual = x
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        print('out ', out.size())
-
+        
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-        print('out ', out.size())
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -69,8 +67,4 @@ class BottleneckBlock(nn.Module):
         return out
 
 def comptue_dim(dim, padding, kernel_size, stride):
-    print(dim)
-    print(padding)
-    print(kernel_size)
-    print(stride)
     return np.floor((dim + 2*padding - kernel_size) / stride) + 1
