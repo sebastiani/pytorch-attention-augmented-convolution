@@ -6,7 +6,8 @@ from ignite.engine import Events, create_supervised_evaluator, create_supervised
 from ignite.metrics import Loss, Accuracy
 from ignite.contrib.handlers.param_scheduler import CosineAnnealingScheduler
 from ignite.handlers.checkpoint import ModelCheckpoint
-from torchvision.datasets import CIFAR100, CocoDetection
+from torchvision.datasets import CIFAR100
+from .dataloaders import CocoDetection
 from torchvision.transforms import Compose, RandomCrop, RandomHorizontalFlip, Normalize, ToTensor
 from .model.wideresnet import AttentionWideResNet
 from .model.retinanet import AttentionRetinaNet
@@ -17,6 +18,7 @@ from .utils.utils import Resizer, Augmenter
 import argparse
 import json
 
+HOME_PREFIX = '/home/se26956/projects/IRP/pytorch-attention-augmented-convolution/'
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="config path")
@@ -66,7 +68,6 @@ def get_COCO_loaders(batch_size):
 
 
     train_transforms = Compose([
-        Resizer(),
         RandomHorizontalFlip(p=0.5),
         ToTensor(),
         normalize
@@ -77,16 +78,20 @@ def get_COCO_loaders(batch_size):
         normalize
     ])
 
-    train_dataset = CocoDetection('data/coco_detection/train',
-                                  'data/coco_detection/annotations/instances_train2017.json',
-                                   transform=train_transforms)
+    train_dataset = CocoDetection(HOME_PREFIX+'data/coco_detection/train2017',
+                                  HOME_PREFIX+'data/coco_detection/annotations/instances_train2017.json',
+                                  img_and_target_transform=Resizer(),
+                                  transform=train_transforms)
 
-    test_dataset = CocoDetection('./data/coco_detection/val',
-                                 './data/coco_detection/annotations/instances_val2017.json',
+    test_dataset = CocoDetection(HOME_PREFIX+'data/coco_detection/val',
+                                 HOME_PREFIX+'data/coco_detection/annotations/instances_val2017.json',
                                  transform=test_transform)
 
     train_loader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+    for input, label in train_loader:
+        print(input.size())
 
     return train_loader, test_loader
 

@@ -22,7 +22,13 @@ class BottleneckBlock(nn.Module):
         self.conv3 = None
         if attention:
             dk = round(kappa * expansion_dim)
+            while dk % num_heads != 0:
+                dk += 1
+
             dv = round(nu * expansion_dim)
+            while dv % num_heads != 0:
+                dv += 1
+
             h = comptue_dim(H, 1, 3, stride)
             w = comptue_dim(W, 1, 3, stride)
 

@@ -5,6 +5,7 @@ from ..utils.utils import comptue_dim
 
 
 class BottleneckBlock(nn.Module):
+    expansion = 4
     def __init__(self, input_dim, output_dim, stride=1, downsample_shortcut=None, attention=False, expansion=4,
                  kappa=None, nu=None, num_heads=None, H=None, W=None):
         super(BottleneckBlock, self).__init__()
