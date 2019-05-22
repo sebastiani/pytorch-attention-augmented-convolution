@@ -243,7 +243,7 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        if attention:
+        if block == BottleneckBlock:
             layers.append(block(self.inplanes, planes, stride, downsample, attention, kappa=0.1, nu=0.05, num_heads=4, H=h, W=w))   #how to determine heights and widths =X
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):

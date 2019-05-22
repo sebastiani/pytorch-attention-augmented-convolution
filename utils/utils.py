@@ -9,6 +9,8 @@ import skimage.transform
 import skimage.color
 import skimage
 
+from PIL import Image
+
 
 def comptue_dim(dim, padding, kernel_size, stride):
     return np.floor((dim + 2*padding - kernel_size) / stride) + 1
@@ -149,8 +151,10 @@ class ClipBoxes(nn.Module):
 class Resizer(object):
     """Convert ndarrays in sample to Tensors."""
 
-    def __call__(self, sample, min_side=608, max_side=1024):
-        image, annots = sample['img'], sample['annot']
+    def __call__(self, image, annots, min_side=608, max_side=1024):
+
+        image = np.array(image)
+        annots = np.array([[*annot['bbox'], annot['category_id']] for annot in annots])
 
         rows, cols, cns = image.shape
 
@@ -176,9 +180,10 @@ class Resizer(object):
         new_image = np.zeros((rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
 
-        annots[:, :4] *= scale
+        annots[:, 4] = annots[:, 4] * scale
 
-        return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots), 'scale': scale}
+
+        return Image.fromarray(np.uint8(new_image)), torch.from_numpy(annots), scale
 
 
 class Augmenter(object):
