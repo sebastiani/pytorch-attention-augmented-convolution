@@ -24,16 +24,15 @@ from torch.utils.data import Dataset, DataLoader
 
 import coco_eval
 import csv_eval
-from torchvision.transforms import Resize
 
-
+#assert torch.__version__.split('.')[1] == '4'
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 
 
 def main(args=None):
 
-    parser = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
+    parser     = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
 
     parser.add_argument('--dataset', help='Dataset type, must be one of csv or coco.')
     parser.add_argument('--coco_path', help='Path to COCO directory')
@@ -43,6 +42,7 @@ def main(args=None):
 
     parser.add_argument('--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
     parser.add_argument('--epochs', help='Number of epochs', type=int, default=100)
+    parser.add_argument('--attention', help='use attention version', action='store_true')
 
     parser = parser.parse_args(args)
 
@@ -76,11 +76,11 @@ def main(args=None):
         raise ValueError('Dataset type not understood (must be csv or coco), exiting.')
 
     sampler = AspectRatioBasedSampler(dataset_train, batch_size=1, drop_last=False)
-    dataloader_train = DataLoader(dataset_train, num_workers=16, collate_fn=collater, batch_sampler=sampler)
+    dataloader_train = DataLoader(dataset_train, num_workers=3, collate_fn=collater, batch_sampler=sampler)
 
     if dataset_val is not None:
         sampler_val = AspectRatioBasedSampler(dataset_val, batch_size=1, drop_last=False)
-        dataloader_val = DataLoader(dataset_val, num_workers=16, collate_fn=collater, batch_sampler=sampler_val)
+        dataloader_val = DataLoader(dataset_val, num_workers=3, collate_fn=collater, batch_sampler=sampler_val)
 
     # Create the model
     if parser.depth == 18:
@@ -88,7 +88,10 @@ def main(args=None):
     elif parser.depth == 34:
         retinanet = model.resnet34(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 50:
-        retinanet = model.resnet50(num_classes=dataset_train.num_classes(), pretrained=False)
+        if parser.attention:
+            retinanet = model.attention_resnet50(num_classes=dataset_train.num_classes(), pretrained=True)
+        else:
+            retinanet = model.resnet50(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 101:
         retinanet = model.resnet101(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 152:
@@ -116,6 +119,8 @@ def main(args=None):
 
     print('Num training images: {}'.format(len(dataset_train)))
 
+    focalLoss = losses.FocalLoss()
+
     for epoch_num in range(parser.epochs):
 
         retinanet.train()
@@ -127,7 +132,9 @@ def main(args=None):
             try:
                 optimizer.zero_grad()
 
-                classification_loss, regression_loss = retinanet([data['img'].cuda().float(), data['annot']])
+                #classification_loss, regression_loss = retinanet([data['img'].cuda().float(), data['annot']])
+                classification, regression, anchors, annotations = retinanet([data['img'].cuda().float(), data['annot']])
+                classification_loss, regression_loss = focalLoss(classification, regression, anchors, annotations)
 
                 classification_loss = classification_loss.mean()
                 regression_loss = regression_loss.mean()

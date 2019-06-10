@@ -3,17 +3,11 @@ import torch
 import math
 import time
 import torch.utils.model_zoo as model_zoo
-from utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
-from BottleneckBlock import  BottleneckBlock
+from utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes, AttentionBottleneck
 from anchors import Anchors
 import losses
 from lib.nms.gpu_nms import gpu_nms
-import numpy as np
 
-def nms(dets, thresh):
-    "Dispatch to either CPU or GPU NMS implementations.\
-    Accept dets as tensor"""
-    return gpu_nms(dets, thresh)
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -162,35 +156,22 @@ class ClassificationModel(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, num_classes, block, layers, attention=True, input_size=(3, 800, 800)):
+    def __init__(self, num_classes, block, layers):
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        #dummy = torch.rand((1, *input_size))
-        #sizes = self.compute_sizes(self.conv1, dummy)
-
-        #self.layer1 = self._make_layer(block, 64, layers[0], attention, h=sizes[2], w=sizes[3])
-        self.layer1 = self._make_layer(block, 64, layers[0], attention=attention, rel_encoding=False)
-        #dummy = torch.rand(sizes)
-        #sizes = self.compute_sizes(self.layer1, dummy)
-
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, attention=attention, rel_encoding=False)
-        #dummy = torch.rand(sizes)
-        #sizes = self.compute_sizes(self.layer2, dummy)
-
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, attention=attention, rel_encoding=False)
-        #dummy = torch.rand(sizes)
-        #sizes = self.comptue_sizes(self.layer3, dummy)
-
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, attention=attention, rel_encoding=False)
 
         if block == BasicBlock:
             fpn_sizes = [self.layer2[layers[1]-1].conv2.out_channels, self.layer3[layers[2]-1].conv2.out_channels, self.layer4[layers[3]-1].conv2.out_channels]
-        elif block == Bottleneck or block == BottleneckBlock:
+        elif block == Bottleneck or block == AttentionBottleneck:
             fpn_sizes = [self.layer2[layers[1]-1].conv3.out_channels, self.layer3[layers[2]-1].conv3.out_channels, self.layer4[layers[3]-1].conv3.out_channels]
 
         self.fpn = PyramidFeatures(fpn_sizes[0], fpn_sizes[1], fpn_sizes[2])
@@ -224,9 +205,8 @@ class ResNet(nn.Module):
 
         self.freeze_bn()
 
-    def _make_layer(self, block, planes, blocks, stride=1, attention=False, h=None, w=None, rel_encoding=False):
+    def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
-
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
@@ -235,11 +215,7 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        if block == BottleneckBlock:
-            layers.append(
-                block(self.inplanes, planes, stride, downsample, attention=True, kappa=0.1, nu=0.05, num_heads=4, H=h, W=w, rel_encoding=rel_encoding))
-        else:
-            layers.append(block(self.inplanes, planes, stride, downsample))
+        layers.append(block(self.inplanes, planes, stride, downsample))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
@@ -251,13 +227,6 @@ class ResNet(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
-
-    def comptue_dim(self, dim, padding, kernel_size, stride):
-        return np.floor((dim + 2 * padding - kernel_size) / stride) + 1
-
-    def compute_sizes(self, layer, dummy_input):
-        dummy_input = layer(dummy_input)
-        return dummy_input.size()
 
     def forward(self, inputs):
 
@@ -285,7 +254,8 @@ class ResNet(nn.Module):
         anchors = self.anchors(img_batch)
 
         if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations)
+            #return self.focalLoss(classification, regression, anchors, annotations)
+            return classification, regression, anchors, annotations
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
             transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
@@ -301,12 +271,17 @@ class ResNet(nn.Module):
             classification = classification[:, scores_over_thresh, :]
             transformed_anchors = transformed_anchors[:, scores_over_thresh, :]
             scores = scores[:, scores_over_thresh, :]
-
-            anchors_nms_idx = nms(torch.cat([transformed_anchors, scores], dim=2)[0, :, :], 0.5)
+            dets = torch.cat([transformed_anchors, scores], dim=2)[0, :, :]
+            anchors_nms_idx = self.nms(dets.cpu().numpy(), 0.5)
 
             nms_scores, nms_class = classification[0, anchors_nms_idx, :].max(dim=1)
 
             return [nms_scores, nms_class, transformed_anchors[0, anchors_nms_idx, :]]
+
+    def nms(self, dets, thresh):
+        """Dispatch to either CPU or GPU NMS implementations.
+        Accept dets as tensor"""
+        return gpu_nms(dets, thresh)
 
 
 
@@ -337,9 +312,21 @@ def resnet50(num_classes, pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(num_classes, BottleneckBlock, [3, 4, 6, 3], attention=True, input_size=(3, 800, 800))
+    model = ResNet(num_classes, Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet50'], model_dir='.'), strict=False)
+    return model
+
+
+def attention_resnet50(num_classes, pretrained=False, **kwargs):
+    """
+    :param num_classes:
+    :param pretrained:
+    :param kwargs:
+    :return:
+    """
+
+    model = ResNet(num_classes, AttentionBottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
 def resnet101(num_classes, pretrained=False, **kwargs):

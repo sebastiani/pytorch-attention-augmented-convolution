@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from attentionConv2d import AttentionConv2d
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -75,6 +77,46 @@ class Bottleneck(nn.Module):
         out += residual
         out = self.relu(out)
 
+        return out
+
+class AttentionBottleneck(nn.Module):
+    expansion = 4
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super(AttentionBottleneck, self).__init__()
+        n = np.log(planes) // np.log(2)
+
+        dk = int(planes //  2 ** (n-1))
+        dv = int(planes // 2 ** (n-2))
+        self.conv1 = AttentionConv2d(inplanes, planes, dk, dv, num_heads=4, kernel_size=1, padding=0,
+                                     rel_encoding=False, height=None, width=None)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(planes * 4)
+        self.relu  = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
         return out
 
 class BBoxTransform(nn.Module):
